@@ -1,8 +1,16 @@
 use actix_web::{get, App, HttpResponse, HttpServer, Responder};
+use askama::Template;
+
+#[derive(Template)]
+#[template(path = "index.html")]
+struct HelloTemplate<'a> {
+    name: &'a str,
+}
 
 #[get("/")]
 async fn hello() -> impl Responder {
-    HttpResponse::Ok().body("Hello world!")
+    let hello = HelloTemplate { name: "quack" }.render().unwrap();
+    HttpResponse::Ok().body(hello)
 }
 
 #[actix_web::main]
