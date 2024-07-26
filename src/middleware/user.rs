@@ -46,7 +46,9 @@ where
     fn call(&self, req: ServiceRequest) -> Self::Future {
         if req.request().cookie("user_secret").is_some() {
             req.extensions_mut().insert(User {
+                id: 0,
                 name: "duck!".into(),
+                password: "foobar".into(),
             });
         }
 

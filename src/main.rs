@@ -6,7 +6,9 @@ use actix_web::{
     App, Error, HttpMessage, HttpRequest, HttpResponse, HttpServer, Responder,
 };
 use askama::Template;
-use data::User;
+use data::{DataPool, User};
+use serde::Deserialize;
+use sqlx::{sqlite::SqlitePoolOptions};
 
 mod data;
 mod middleware;
@@ -39,8 +41,31 @@ async fn login_get() -> impl Responder {
     HttpResponse::Ok().body(login)
 }
 
+#[derive(Deserialize)]
+struct LoginData {
+    name: String,
+    password: String,
+}
+
 #[post("/login")]
-async fn login_post() -> impl Responder {
+async fn login_post(
+    web::Form(form): web::Form<LoginData>,
+    db: web::Data<DataPool>,
+) -> impl Responder {
+    let user = sqlx::query_as!(
+        User,
+        "SELECT * FROM users WHERE name=? and password=?",
+        form.name,
+        form.password
+    )
+    .fetch_one(&db.pool)
+    .await;
+
+    if user.is_err() {
+        let login = LoginTemplate {}.render().unwrap();
+        return HttpResponse::Unauthorized().body(login);
+    }
+
     let mut resp = HttpResponse::SeeOther()
         .insert_header(("Location", "/"))
         .body("");
@@ -58,8 +83,19 @@ async fn js_files(req: HttpRequest) -> Result<fs::NamedFile, Error> {
 
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
-    HttpServer::new(|| {
+    // TODO: make this configurable
+    const DATABASE_PATH: &str = "tmp/users.db";
+
+    let sqlite_pool = SqlitePoolOptions::new()
+        .max_connections(10)
+        .connect(DATABASE_PATH)
+        .await
+        .unwrap();
+    let app_state = DataPool { pool: sqlite_pool };
+
+    HttpServer::new(move || {
         App::new()
+            .app_data(web::Data::new(app_state.clone()))
             .wrap(middleware::user::UserSession)
             .service(login_get)
             .service(login_post)
