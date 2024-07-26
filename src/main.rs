@@ -107,8 +107,7 @@ async fn js_files(req: HttpRequest) -> Result<fs::NamedFile, Error> {
 
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
-    // TODO: make this configurable
-    const DATABASE_PATH: &str = "tmp/users.db";
+    const DATABASE_PATH: &str = std::env!("DATABASE_URL");
 
     let sqlite_pool = SqlitePoolOptions::new()
         .max_connections(10)
