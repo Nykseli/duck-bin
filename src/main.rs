@@ -1,3 +1,5 @@
+use std::io::Read;
+
 use actix_files as fs;
 use actix_web::{
     cookie::Cookie,
@@ -8,7 +10,7 @@ use actix_web::{
 use askama::Template;
 use data::{DataPool, User};
 use serde::Deserialize;
-use sqlx::{sqlite::SqlitePoolOptions};
+use sqlx::sqlite::SqlitePoolOptions;
 
 mod data;
 mod middleware;
@@ -61,15 +63,37 @@ async fn login_post(
     .fetch_one(&db.pool)
     .await;
 
-    if user.is_err() {
-        let login = LoginTemplate {}.render().unwrap();
-        return HttpResponse::Unauthorized().body(login);
-    }
+    let user = match user {
+        Ok(user) => user,
+        Err(_) => {
+            let login = LoginTemplate {}.render().unwrap();
+            return HttpResponse::Unauthorized().body(login);
+        }
+    };
+
+    let mut file_buf = [0u8; 64];
+    let mut rand_file = std::fs::File::open("/dev/random").unwrap();
+    let _ = rand_file.read(&mut file_buf).unwrap();
+    let user_secret: Vec<u8> = file_buf
+        .iter()
+        .filter(|b| b.is_ascii_alphanumeric())
+        .copied()
+        .collect();
+    let user_secret = String::from_utf8(user_secret).unwrap();
+
+    sqlx::query!(
+        "INSERT INTO user_sessions (user_id, session_id) VALUES (?, ?)",
+        user.id,
+        user_secret
+    )
+    .execute(&db.pool)
+    .await
+    .unwrap();
 
     let mut resp = HttpResponse::SeeOther()
         .insert_header(("Location", "/"))
         .body("");
-    resp.add_cookie(&Cookie::new("user_secret", "super-secret-key"))
+    resp.add_cookie(&Cookie::new("user_secret", &user_secret))
         .unwrap();
     resp
 }
