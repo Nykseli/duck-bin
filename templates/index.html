@@ -3,4 +3,10 @@
 
 {% block content %}
 <p>Hello, {{ name }}</p>
+<form action="/add_content" method="post">
+    <label for="fname">Username:</label><br>
+    <textarea id="content-text" name="content" value="" cols="120" rows="40" > </textarea><br>
+    <input type="submit" value="Submit"> <br>
+    <p>Errors here when error handling exists</p>
+</form>
 {% endblock %}
