@@ -1,19 +1,20 @@
-use std::io::Read;
-
 use actix_files as fs;
 use actix_web::{
     cookie::Cookie,
-    get, post,
+    get,
+    http::header::ContentType,
+    post,
     web::{self},
     App, Error, HttpMessage, HttpRequest, HttpResponse, HttpServer, Responder,
 };
 use askama::Template;
-use data::{DataPool, User};
+use data::{Content, DataPool, User};
 use serde::Deserialize;
 use sqlx::sqlite::SqlitePoolOptions;
 
 mod data;
 mod middleware;
+mod util;
 
 #[derive(Template)]
 #[template(path = "index.html")]
@@ -71,15 +72,7 @@ async fn login_post(
         }
     };
 
-    let mut file_buf = [0u8; 64];
-    let mut rand_file = std::fs::File::open("/dev/random").unwrap();
-    let _ = rand_file.read(&mut file_buf).unwrap();
-    let user_secret: Vec<u8> = file_buf
-        .iter()
-        .filter(|b| b.is_ascii_alphanumeric())
-        .copied()
-        .collect();
-    let user_secret = String::from_utf8(user_secret).unwrap();
+    let user_secret = util::rand_string();
 
     sqlx::query!(
         "INSERT INTO user_sessions (user_id, session_id) VALUES (?, ?)",
@@ -96,6 +89,75 @@ async fn login_post(
     resp.add_cookie(&Cookie::new("user_secret", &user_secret))
         .unwrap();
     resp
+}
+
+#[derive(Deserialize)]
+struct ContentData {
+    content: String,
+}
+
+#[post("/add_content")]
+async fn add_content(
+    req: HttpRequest,
+    web::Form(form): web::Form<ContentData>,
+    db: web::Data<DataPool>,
+) -> impl Responder {
+    let user = {
+        let extensions = req.extensions();
+        // TODO: redirect to /login if no user
+        let user = if let Some(user) = extensions.get::<User>() {
+            user.clone()
+        } else {
+            let login = LoginTemplate {}.render().unwrap();
+            return HttpResponse::Unauthorized().body(login);
+        };
+    };
+
+    let content_id = util::rand_string();
+    sqlx::query!(
+        "INSERT INTO content (user_id, content_id, content) VALUES (?, ?, ?)",
+        user.id,
+        content_id,
+        form.content
+    )
+    .execute(&db.pool)
+    .await
+    .unwrap();
+
+    HttpResponse::SeeOther()
+        .insert_header(("Location", format!("/content/{content_id}")))
+        .body("")
+}
+
+#[derive(Template)]
+#[template(path = "content.html")]
+struct ContentTemplate<'a> {
+    content: &'a str,
+}
+
+#[get("/content/{id}")]
+async fn get_content(path: web::Path<String>, db: web::Data<DataPool>) -> impl Responder {
+    let content_id = path.into_inner();
+
+    let content = sqlx::query_as!(
+        Content,
+        "SELECT * FROM content WHERE content_id=?",
+        content_id
+    )
+    .fetch_one(&db.pool)
+    .await;
+
+    // TODO: handle 404
+    let content = content.unwrap();
+
+    let cont = ContentTemplate {
+        content: &content.content,
+    }
+    .render()
+    .unwrap();
+    HttpResponse::Ok()
+        .insert_header(ContentType::html())
+        .body(cont)
 }
 
 async fn js_files(req: HttpRequest) -> Result<fs::NamedFile, Error> {
@@ -122,6 +184,8 @@ async fn main() -> std::io::Result<()> {
             .wrap(middleware::user::UserSession)
             .service(login_get)
             .service(login_post)
+            .service(add_content)
+            .service(get_content)
             .service(hello)
             .service(
                 web::scope("/static").service(web::resource("js/{filename:.*.js}").to(js_files)),
