@@ -4,8 +4,18 @@
 {% block content %}
 <p>Hello, {{ name }}</p>
 <form action="/add_content" method="post">
-    <label for="fname">Username:</label><br>
-    <textarea id="content-text" name="content" value="" cols="120" rows="40" > </textarea><br>
+    <label for="title">Title:</label>
+    <input type="text" id="title" name="title" value=""><br>
+    <label for="expire">Expiration:</label>
+    <select name="expire" id="expire">
+        <option value="never">never</option>
+        <option value="30d">30d</option>
+        <option value="7d">7d</option>
+        <option value="1d">1d</option>
+        <option value="1h">1h</option>
+    </select>
+    <br>
+    <textarea id="content-text" name="content" value="" cols="120" rows="40"> </textarea><br>
     <input type="submit" value="Submit"> <br>
     <p>Errors here when error handling exists</p>
 </form>
