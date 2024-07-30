@@ -1,3 +1,4 @@
+use chrono::NaiveDateTime;
 use sqlx::SqlitePool;
 
 #[derive(Clone)]
@@ -18,6 +19,12 @@ pub struct Content {
     pub user_id: i64,
     /// unique content id
     pub content_id: String,
+    /// when content is created
+    pub created: NaiveDateTime,
+    /// when content should expire, None if never
+    pub expires: Option<NaiveDateTime>,
+    /// content page title
+    pub title: String,
     /// raw plaintext content
     pub content: String,
 }

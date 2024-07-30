@@ -8,6 +8,7 @@ use actix_web::{
     App, Error, HttpMessage, HttpRequest, HttpResponse, HttpServer, Responder,
 };
 use askama::Template;
+use chrono::{DateTime, Datelike, NaiveDate, NaiveDateTime, TimeDelta, Timelike, Utc};
 use data::{Content, DataPool, User};
 use serde::Deserialize;
 use sqlx::sqlite::SqlitePoolOptions;
@@ -94,6 +95,15 @@ async fn login_post(
 #[derive(Deserialize)]
 struct ContentData {
     content: String,
+    title: String,
+    expire: String,
+}
+
+fn utc_to_ndt(utc: DateTime<Utc>) -> NaiveDateTime {
+    NaiveDate::from_ymd_opt(utc.year(), utc.month(), utc.day())
+        .unwrap()
+        .and_hms_opt(utc.hour(), utc.minute(), utc.second())
+        .unwrap()
 }
 
 #[post("/add_content")]
@@ -105,20 +115,40 @@ async fn add_content(
     let user = {
         let extensions = req.extensions();
         // TODO: redirect to /login if no user
-        let user = if let Some(user) = extensions.get::<User>() {
+        if let Some(user) = extensions.get::<User>() {
             user.clone()
         } else {
             let login = LoginTemplate {}.render().unwrap();
             return HttpResponse::Unauthorized().body(login);
-        };
+        }
     };
 
     let content_id = util::rand_string();
+    let expire_hours = if form.expire == "30d" {
+        Some(30 * 24)
+    } else if form.expire == "7d" {
+        Some(7 * 24)
+    } else if form.expire == "1d" {
+        Some(24)
+    } else if form.expire == "1h" {
+        Some(1)
+    } else {
+        None
+    };
+
+    // apparently sqlx/sqlite is not happy with DateTime so we need to some type conversion
+    let created = chrono::Utc::now();
+    let created_ndt = utc_to_ndt(created);
+    let expires = expire_hours.map(|h| utc_to_ndt(created + TimeDelta::hours(h)));
+
     sqlx::query!(
-        "INSERT INTO content (user_id, content_id, content) VALUES (?, ?, ?)",
+        "INSERT INTO content (user_id, content_id, content, title, created, expires) VALUES (?, ?, ?, ?, ?, ?)",
         user.id,
         content_id,
-        form.content
+        form.content,
+        form.title,
+        created_ndt,
+        expires
     )
     .execute(&db.pool)
     .await
