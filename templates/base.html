@@ -7,6 +7,9 @@
     <title>Duck Bin</title>
     <link href="data:," rel="icon">
     <script src="/static/js/htmx.min.js"></script>
+    {% if crate::HOT_RELOAD -%}
+    <script src="/static/js/hot_reload.js"></script>
+    {%- endif %}
 </head>
 
 <body>
