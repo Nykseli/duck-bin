@@ -17,6 +17,13 @@ mod data;
 mod middleware;
 mod util;
 
+#[cfg(feature = "hot_reload")]
+mod hot_reload;
+#[cfg(feature = "hot_reload")]
+pub const HOT_RELOAD: bool = true;
+#[cfg(not(feature = "hot_reload"))]
+pub const HOT_RELOAD: bool = false;
+
 #[derive(Template)]
 #[template(path = "index.html")]
 struct HelloTemplate<'a> {
@@ -209,7 +216,7 @@ async fn main() -> std::io::Result<()> {
     let app_state = DataPool { pool: sqlite_pool };
 
     HttpServer::new(move || {
-        App::new()
+        let app = App::new()
             .app_data(web::Data::new(app_state.clone()))
             .wrap(middleware::user::UserSession)
             .service(login_get)
@@ -219,7 +226,16 @@ async fn main() -> std::io::Result<()> {
             .service(hello)
             .service(
                 web::scope("/static").service(web::resource("js/{filename:.*.js}").to(js_files)),
-            )
+            );
+
+        #[cfg(feature = "hot_reload")]
+        {
+            app.service(web::scope("/ws").route("/", web::get().to(hot_reload::hot_reload_ws)))
+        }
+        #[cfg(not(feature = "hot_reload"))]
+        {
+            app
+        }
     })
     .bind(("127.0.0.1", 8080))?
     .run()
