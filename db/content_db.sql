@@ -8,7 +8,7 @@ CREATE TABLE content (
     -- when content should expire, NULL if never
     expires DATETIME,
     -- content page title
-    title TEXT UNIQUE NOT NULL,
+    title TEXT NOT NULL,
     -- raw plaintext content
     content TEXT NOT NULL
 );
