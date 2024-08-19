@@ -165,12 +165,24 @@ async fn add_content(
     let created_ndt = utc_to_ndt(created);
     let expires = expire_hours.map(|h| utc_to_ndt(created + TimeDelta::hours(h)));
 
+    let title = if !form.title.trim().is_empty() {
+        form.title
+    } else {
+        form.content
+            .lines()
+            .next()
+            .unwrap_or("")
+            .chars()
+            .take(20)
+            .collect()
+    };
+
     sqlx::query!(
         "INSERT INTO content (user_id, content_id, content, title, created, expires) VALUES (?, ?, ?, ?, ?, ?)",
         user.id,
         content_id,
         form.content,
-        form.title,
+        title,
         created_ndt,
         expires
     )
