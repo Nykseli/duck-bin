@@ -2,21 +2,51 @@
 
 
 {% block content %}
+
+<style>
+    #sidebar {
+        position: absolute;
+        max-width: 150px;
+        min-width: 150px;
+        border: 1px solid black;
+        border-radius: 3px;
+        min-height: 350px;
+        top: 150px
+    }
+
+    #paste-form {
+        margin: 0 0 0 158px;
+    }
+</style>
+
 <p>Hello, {{ name }}</p>
-<form action="/add_content" method="post">
-    <label for="title">Title:</label>
-    <input type="text" id="title" name="title" value=""><br>
-    <label for="expire">Expiration:</label>
-    <select name="expire" id="expire">
-        <option value="never">never</option>
-        <option value="30d">30d</option>
-        <option value="7d">7d</option>
-        <option value="1d">1d</option>
-        <option value="1h">1h</option>
-    </select>
-    <br>
-    <textarea id="content-text" name="content" value="" cols="120" rows="40"> </textarea><br>
-    <input type="submit" value="Submit"> <br>
-    <p>Errors here when error handling exists</p>
-</form>
+
+<div id="sidebar">
+    {% for post in old_posts %}
+    <div id="old-paste-item">
+        <a href="/content/{{ post.content_id }}"> {{ post.title }} </a>
+        <p>{{ post.content|truncate(10) }}</p>
+    </div>
+    {% endfor %}
+</div>
+
+<div id="paste-form">
+    <h1>New paste</h1>
+    <form action="/add_content" method="post">
+        <label for="title">Title:</label>
+        <input type="text" id="title" name="title" value=""><br>
+        <label for="expire">Expiration:</label>
+        <select name="expire" id="expire">
+            <option value="never">never</option>
+            <option value="30d">30d</option>
+            <option value="7d">7d</option>
+            <option value="1d">1d</option>
+            <option value="1h">1h</option>
+        </select>
+        <br>
+        <textarea id="content-text" name="content" value="" cols="120" rows="40"> </textarea><br>
+        <input type="submit" value="Submit"> <br>
+        <p>Errors here when error handling exists</p>
+    </form>
+</div>
 {% endblock %}

@@ -24,10 +24,16 @@ pub const HOT_RELOAD: bool = true;
 #[cfg(not(feature = "hot_reload"))]
 pub const HOT_RELOAD: bool = false;
 
+/// Get logged in user from HttpRequest, returns None if user is not logged in
+fn get_user(req: HttpRequest) -> Option<User> {
+    req.extensions().get::<User>().cloned()
+}
+
 #[derive(Template)]
 #[template(path = "index.html")]
 struct HelloTemplate<'a> {
     name: &'a str,
+    old_posts: Vec<Content>,
 }
 
 #[derive(Template)]
@@ -35,9 +41,24 @@ struct HelloTemplate<'a> {
 struct LoginTemplate {}
 
 #[get("/")]
-async fn hello(req: HttpRequest) -> impl Responder {
-    if let Some(user) = req.extensions().get::<User>() {
-        let hello = HelloTemplate { name: &user.name }.render().unwrap();
+async fn hello(req: HttpRequest, db: web::Data<DataPool>) -> impl Responder {
+    if let Some(user) = get_user(req) {
+        let user_name = user.name.clone();
+        let old_posts = sqlx::query_as!(
+            Content,
+            "SELECT * FROM content where user_id=? ORDER BY created DESC LIMIT 5",
+            user.id
+        )
+        .fetch_all(&db.pool)
+        .await
+        .unwrap();
+
+        let hello = HelloTemplate {
+            name: &user_name,
+            old_posts,
+        }
+        .render()
+        .unwrap();
         HttpResponse::Ok().body(hello)
     } else {
         HttpResponse::TemporaryRedirect()
@@ -119,15 +140,11 @@ async fn add_content(
     web::Form(form): web::Form<ContentData>,
     db: web::Data<DataPool>,
 ) -> impl Responder {
-    let user = {
-        let extensions = req.extensions();
-        // TODO: redirect to /login if no user
-        if let Some(user) = extensions.get::<User>() {
-            user.clone()
-        } else {
-            let login = LoginTemplate {}.render().unwrap();
-            return HttpResponse::Unauthorized().body(login);
-        }
+    let user = if let Some(user) = get_user(req) {
+        user
+    } else {
+        let login = LoginTemplate {}.render().unwrap();
+        return HttpResponse::Unauthorized().body(login);
     };
 
     let content_id = util::rand_string();
